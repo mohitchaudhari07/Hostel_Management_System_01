@@ -3,7 +3,11 @@ const Student = require("../models/Student");
 
 // Helper function to calculate Euclidean distance between two descriptors
 const calculateDistance = (descriptor1, descriptor2) => {
-  if (!descriptor1 || !descriptor2 || descriptor1.length !== descriptor2.length) {
+  if (
+    !descriptor1 ||
+    !descriptor2 ||
+    descriptor1.length !== descriptor2.length
+  ) {
     return 1;
   }
   let sum = 0;
@@ -21,7 +25,8 @@ exports.registerFace = async (req, res) => {
 
     if (!studentId || !faceDescriptor || faceDescriptor.length !== 128) {
       return res.status(400).json({
-        message: "Invalid face descriptor. Please provide a valid 128-dimensional face descriptor.",
+        message:
+          "Invalid face descriptor. Please provide a valid 128-dimensional face descriptor.",
       });
     }
 
@@ -75,7 +80,7 @@ exports.removeFace = async (req, res) => {
 exports.getFaceRegisteredStudents = async (req, res) => {
   try {
     const students = await Student.find({ faceRegistered: true }).select(
-      "name email phone faceRegisteredDate"
+      "name email phone faceRegisteredDate",
     );
     res.json(students);
   } catch (error) {
@@ -109,7 +114,10 @@ exports.recognizeFace = async (req, res) => {
     let bestDistance = 0.6; // Threshold for face recognition (lower is better, 0-1)
 
     for (const student of registeredStudents) {
-      const distance = calculateDistance(faceDescriptor, student.faceDescriptor);
+      const distance = calculateDistance(
+        faceDescriptor,
+        student.faceDescriptor,
+      );
 
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -165,9 +173,11 @@ exports.recognizeFace = async (req, res) => {
       attendance.duration = Math.round(timeSinceCheckIn);
 
       // Update status based on duration
-      if (attendance.duration >= 480) { // 8 hours
+      if (attendance.duration >= 480) {
+        // 8 hours
         attendance.status = "Present";
-      } else if (attendance.duration >= 240) { // 4 hours
+      } else if (attendance.duration >= 240) {
+        // 4 hours
         attendance.status = "Partial";
       }
 
@@ -223,7 +233,9 @@ exports.getTodayAttendance = async (req, res) => {
     const absentCount = Math.max(0, allStudents - presentCount);
 
     res.json({
-      attendance: attendance.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)),
+      attendance: attendance.sort(
+        (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
+      ),
       stats: {
         total: allStudents,
         present: presentCount,
@@ -355,6 +367,10 @@ exports.getStudentAttendance = async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
+    if (req.user?.role === "student" && student.email !== req.user.email) {
+      return res.status(403).json({ message: "You can only view your own attendance" });
+    }
+
     let query = { studentId };
 
     if (month && year) {
@@ -374,8 +390,9 @@ exports.getStudentAttendance = async (req, res) => {
 
     // Calculate attendance percentage
     const totalDays = stats.total;
-    const presentDays = stats.present + (stats.partial * 0.5); // Partial counts as half
-    const percentage = totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(1) : 0;
+    const presentDays = stats.present + stats.partial * 0.5; // Partial counts as half
+    const percentage =
+      totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(1) : 0;
 
     res.json({
       student: {
@@ -406,11 +423,13 @@ exports.markAbsentStudents = async (req, res) => {
 
     // Get students who already have attendance marked today
     const existingAttendance = await Attendance.find({ date: today });
-    const markedStudentIds = existingAttendance.map(a => a.studentId.toString());
+    const markedStudentIds = existingAttendance.map((a) =>
+      a.studentId.toString(),
+    );
 
     // Find students who haven't checked in today
     const absentStudents = registeredStudents.filter(
-      student => !markedStudentIds.includes(student._id.toString())
+      (student) => !markedStudentIds.includes(student._id.toString()),
     );
 
     // Mark them as absent
@@ -442,7 +461,9 @@ exports.getAttendanceAnalytics = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+    const start = startDate
+      ? new Date(startDate)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
     const end = endDate ? new Date(endDate) : new Date();
 
     start.setHours(0, 0, 0, 0);
@@ -457,7 +478,12 @@ exports.getAttendanceAnalytics = async (req, res) => {
     const studentStats = {};
 
     attendance.forEach((record) => {
-      const dateKey = record.date.toISOString().split('T')[0];
+      // Skip records with missing student data
+      if (!record.studentId || !record.date) {
+        return;
+      }
+
+      const dateKey = record.date.toISOString().split("T")[0];
       const studentId = record.studentId._id.toString();
 
       // Daily stats
@@ -486,22 +512,37 @@ exports.getAttendanceAnalytics = async (req, res) => {
     });
 
     // Calculate percentages
-    Object.keys(studentStats).forEach(studentId => {
+    Object.keys(studentStats).forEach((studentId) => {
       const stats = studentStats[studentId];
-      const presentDays = stats.present + (stats.partial * 0.5);
-      stats.percentage = stats.total > 0 ? ((presentDays / stats.total) * 100).toFixed(1) : 0;
+      const presentDays = stats.present + stats.partial * 0.5;
+      stats.percentage =
+        stats.total > 0 ? ((presentDays / stats.total) * 100).toFixed(1) : 0;
     });
 
+    const studentStatsArray = Object.values(studentStats);
+    const totalStudents = Object.keys(studentStats).length;
+    const averageAttendance =
+      totalStudents > 0
+        ? studentStatsArray.reduce(
+            (sum, s) => sum + parseFloat(s.percentage),
+            0,
+          ) / totalStudents
+        : 0;
+
     const analytics = {
-      dailyStats: Object.keys(dailyStats).sort().map(date => ({
-        date,
-        ...dailyStats[date],
-      })),
-      studentStats: Object.values(studentStats).sort((a, b) => b.percentage - a.percentage),
+      dailyStats: Object.keys(dailyStats)
+        .sort()
+        .map((date) => ({
+          date,
+          ...dailyStats[date],
+        })),
+      studentStats: studentStatsArray.sort(
+        (a, b) => b.percentage - a.percentage,
+      ),
       summary: {
         totalDays: Object.keys(dailyStats).length,
-        totalStudents: Object.keys(studentStats).length,
-        averageAttendance: Object.values(studentStats).reduce((sum, s) => sum + parseFloat(s.percentage), 0) / Object.keys(studentStats).length,
+        totalStudents: totalStudents,
+        averageAttendance: parseFloat(averageAttendance.toFixed(1)),
       },
     };
 
@@ -525,15 +566,15 @@ exports.getTodayPresentCount = async (req, res) => {
     const presentCount = await Attendance.countDocuments({
       date: {
         $gte: today,
-        $lt: tomorrow
+        $lt: tomorrow,
       },
-      status: { $in: ["Present", "Partial"] }
+      status: { $in: ["Present", "Partial"] },
     });
 
     res.json({
       presentCount: presentCount,
-      date: today.toISOString().split('T')[0],
-      timestamp: new Date()
+      date: today.toISOString().split("T")[0],
+      timestamp: new Date(),
     });
   } catch (error) {
     console.error("Error fetching today's present count:", error);

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Save, Image as ImageIcon, CalendarDays, Trash2, UtensilsCrossed, AlertCircle, Loader2 } from "lucide-react";
 
 const EMPTY_DAY = { breakfast: "", lunch: "", dinner: "" };
 const WEEK_TEMPLATE = {
@@ -22,13 +24,10 @@ function MessMenuManagement({ embedded = false }) {
   const [menus, setMenus] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState({ type: "", text: "" });
   const [imagePreview, setImagePreview] = useState(null);
 
-  const headers =
-    user?.id && user?.role
-      ? { "x-user-id": user.id, "x-user-role": user.role }
-      : {};
+  const headers = user?.id && user?.role ? { "x-user-id": user.id, "x-user-role": user.role } : {};
 
   useEffect(() => {
     fetchMenus();
@@ -37,7 +36,7 @@ function MessMenuManagement({ embedded = false }) {
   const fetchMenus = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://localhost:5000/api/mess/menus", { headers });
+      const res = await axios.get("/mess/menus", { headers });
       const list = res.data?.menus || [];
       setMenus(list);
       if (list.length) {
@@ -45,7 +44,7 @@ function MessMenuManagement({ embedded = false }) {
       }
     } catch (err) {
       console.error("Failed to load menus", err);
-      setMessage("Unable to load menus. You can still create one.");
+      setMessage({ type: "error", text: "Unable to load menus. You can still create one." });
     } finally {
       setLoading(false);
     }
@@ -76,7 +75,7 @@ function MessMenuManagement({ embedded = false }) {
   const handleSave = async () => {
     try {
       setSaving(true);
-      setMessage("");
+      setMessage({ type: "", text: "" });
 
       const payload = {
         weekOf,
@@ -92,12 +91,12 @@ function MessMenuManagement({ embedded = false }) {
         ),
       };
 
-      await axios.post("http://localhost:5000/api/mess/menus", payload, { headers });
-      setMessage("Menu saved successfully.");
+      await axios.post("/mess/menus", payload, { headers });
+      setMessage({ type: "success", text: "Menu saved successfully." });
       fetchMenus();
     } catch (err) {
       console.error("Save failed", err);
-      setMessage(err.response?.data?.message || "Failed to save menu");
+      setMessage({ type: "error", text: err.response?.data?.message || "Failed to save menu" });
     } finally {
       setSaving(false);
     }
@@ -106,11 +105,11 @@ function MessMenuManagement({ embedded = false }) {
   const handleDelete = async (id) => {
     try {
       setSaving(true);
-      await axios.delete(`http://localhost:5000/api/mess/menus/${id}`, { headers });
-      setMessage("Menu deleted.");
+      await axios.delete(`/mess/menus/${id}`, { headers });
+      setMessage({ type: "success", text: "Menu deleted." });
       fetchMenus();
     } catch (err) {
-      setMessage(err.response?.data?.message || "Delete failed");
+      setMessage({ type: "error", text: err.response?.data?.message || "Delete failed" });
     } finally {
       setSaving(false);
     }
@@ -118,133 +117,220 @@ function MessMenuManagement({ embedded = false }) {
 
   const Container = ({ children }) =>
     embedded ? (
-      <div style={s.cardEmbed}>{children}</div>
+      <div className="w-full">{children}</div>
     ) : (
-      <div style={s.container}>{children}</div>
+      <div className="min-h-screen bg-slate-50 p-6 lg:p-10 font-sans">{children}</div>
     );
 
   return (
     <Container>
       {!embedded && (
-        <div style={s.topbar}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div>
-            <h1 style={s.title}>Weekly Menu Management</h1>
-            <p style={s.subtitle}>Add, edit, and publish this week’s meals. Optional food images are local-only preview.</p>
+            <h1 className="text-3xl font-bold text-slate-800">Weekly Menu Management</h1>
+            <p className="text-slate-500 mt-2">Add, edit, and publish this week's meals. Optional food images are local-only preview.</p>
           </div>
-          <div style={s.actions}>
-            <button style={s.outlineBtn} onClick={() => navigate("/mess")}>← Back to Dashboard</button>
-            <button style={s.primaryBtn} onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : "Save Menu"}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => navigate("/mess")}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 font-medium flex items-center gap-2 transition-colors shadow-sm"
+            >
+              <ArrowLeft size={18} />
+              Back
+            </button>
+            <button 
+              onClick={handleSave} 
+              disabled={saving}
+              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center gap-2 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-70"
+            >
+              {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+              Save Menu
             </button>
           </div>
         </div>
       )}
 
-      <div style={embedded ? s.cardEmbedInner : s.card}>
-        <div style={s.formRow}>
-          <label>Week Of</label>
-          <input
-            type="date"
-            value={weekOf}
-            onChange={(e) => setWeekOf(e.target.value)}
-            style={s.input}
-          />
-          <span style={s.helpText}>Starts on Monday. Used to version menus.</span>
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8 ${embedded ? 'p-5' : 'p-6 lg:p-8'}`}
+      >
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <CalendarDays size={18} className="text-blue-500" /> Week Of
+            </label>
+            <input
+              type="date"
+              value={weekOf}
+              onChange={(e) => setWeekOf(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700"
+            />
+            <p className="text-xs text-slate-500 mt-1">Starts on Monday. Used to version menus.</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <ImageIcon size={18} className="text-blue-500" /> Food Image <span className="text-slate-400 font-normal">(optional preview)</span>
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              className="w-full px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-all cursor-pointer"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return setImagePreview(null);
+                const reader = new FileReader();
+                reader.onload = (ev) => setImagePreview(ev.target?.result);
+                reader.readAsDataURL(file);
+              }}
+            />
+            <p className="text-xs text-slate-500 mt-1">Not uploaded to server; for your visual check.</p>
+          </div>
         </div>
 
-        <div style={s.formRow}>
-          <label>Food image (optional, preview only)</label>
-          <input
-            type="file"
-            accept="image/*"
-            style={s.input}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return setImagePreview(null);
-              const reader = new FileReader();
-              reader.onload = (ev) => setImagePreview(ev.target?.result);
-              reader.readAsDataURL(file);
-            }}
-          />
-          <span style={s.helpText}>Not uploaded to server; for your visual check.</span>
-        </div>
+        <AnimatePresence>
+          {imagePreview && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2 inline-block shadow-sm"
+            >
+              <img src={imagePreview} alt="Preview" className="max-h-48 rounded-xl object-cover" />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {imagePreview && (
-          <div style={s.imagePreview}>
-            <img src={imagePreview} alt="Preview" style={{ maxHeight: 160, borderRadius: 12 }} />
-          </div>
-        )}
+        <div className="overflow-x-auto">
+          <div className="min-w-[800px]">
+            {/* Table Header */}
+            <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 mb-4 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="font-bold text-slate-700 text-sm uppercase tracking-wider">Day</div>
+              <div className="font-bold text-slate-700 text-sm uppercase tracking-wider">Breakfast</div>
+              <div className="font-bold text-slate-700 text-sm uppercase tracking-wider">Lunch</div>
+              <div className="font-bold text-slate-700 text-sm uppercase tracking-wider">Dinner</div>
+            </div>
 
-        <div style={s.table}>
-          <div style={s.thead}>
-            <div>Day</div>
-            <div>Breakfast</div>
-            <div>Lunch</div>
-            <div>Dinner</div>
-          </div>
-          {Object.keys(days).map((day) => (
-            <div key={day} style={s.row}>
-              <div style={s.dayCell}>{day}</div>
-              {["breakfast", "lunch", "dinner"].map((meal) => (
-                <div key={meal} style={s.cell}>
-                  <input
-                    type="text"
-                    placeholder="Items separated by +"
-                    value={days[day][meal]}
-                    onChange={(e) => handleChange(day, meal, e.target.value)}
-                    style={s.input}
-                  />
+            {/* Table Body */}
+            <div className="space-y-3">
+              {Object.keys(days).map((day) => (
+                <div key={day} className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 items-center px-4 py-2 hover:bg-slate-50/50 rounded-xl transition-colors group border border-transparent hover:border-slate-100">
+                  <div className="font-bold text-slate-800 flex items-center gap-2">
+                    <div className="w-1.5 h-6 bg-blue-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    {day}
+                  </div>
+                  {["breakfast", "lunch", "dinner"].map((meal) => (
+                    <div key={meal}>
+                      <input
+                        type="text"
+                        placeholder="Items separated by +"
+                        value={days[day][meal]}
+                        onChange={(e) => handleChange(day, meal, e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-slate-700 text-sm bg-white"
+                      />
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
-          ))}
+          </div>
         </div>
 
-        <div style={s.noteRow}>
-          <div style={s.badge}>Features</div>
-          <span>Add / Edit / Delete menu lines. Meal counts stay real-time via dashboard.</span>
+        <div className="mt-8 flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+          <div className="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-full uppercase tracking-wide">
+            Features
+          </div>
+          <span className="text-sm font-medium text-indigo-800">Add / Edit / Delete menu lines. Meal counts stay real-time via dashboard.</span>
         </div>
 
-        {message && <div style={s.message}>{message}</div>}
-      </div>
+        <AnimatePresence>
+          {message.text && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className={`mt-6 p-4 rounded-xl flex items-center gap-3 text-sm font-medium ${
+                message.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}
+            >
+              <AlertCircle size={18} />
+              {message.text}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
-      <div style={embedded ? s.listCardEmbed : s.listCard}>
-        <div style={s.listHeader}>
-          <h3 style={{ margin: 0 }}>Saved Menus</h3>
-          <span style={s.muted}>Click to load, trash to delete</span>
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className={`bg-white rounded-2xl shadow-sm border border-slate-200 ${embedded ? 'p-5' : 'p-6 lg:p-8'}`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <UtensilsCrossed size={20} className="text-blue-600" />
+            Saved Menus
+          </h3>
+          <span className="text-sm font-medium text-slate-500">Click to load, trash to delete</span>
         </div>
+
         {loading ? (
-          <div style={s.muted}>Loading menus…</div>
+          <div className="flex justify-center items-center py-12 text-slate-400">
+            <Loader2 className="animate-spin" size={32} />
+          </div>
         ) : menus.length === 0 ? (
-          <div style={s.muted}>No menus yet.</div>
+          <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
+            <UtensilsCrossed className="mx-auto text-slate-300 mb-3" size={40} />
+            <p className="text-slate-500 font-medium">No menus saved yet.</p>
+          </div>
         ) : (
-          <div style={s.menuGrid}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {menus.map((m) => (
-              <div key={m._id} style={s.menuCard} onClick={() => hydrateFormFromMenu(m)}>
-                <div style={s.menuTop}>
-                  <div>
-                    <div style={s.menuWeek}>Week of {m.weekOf?.slice(0, 10)}</div>
-                    <div style={s.menuMeta}>{Object.keys(m.days || {}).length} days configured</div>
+              <motion.div 
+                key={m._id} 
+                whileHover={{ y: -2 }}
+                onClick={() => hydrateFormFromMenu(m)}
+                className="bg-slate-50 border border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-400 hover:shadow-md transition-all group"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                      <CalendarDays size={18} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800">Week of</h4>
+                      <p className="text-sm font-medium text-slate-600">{m.weekOf?.slice(0, 10)}</p>
+                    </div>
                   </div>
                   <button
-                    style={s.trashBtn}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(m._id);
                     }}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
-                    🗑️
+                    <Trash2 size={18} />
                   </button>
                 </div>
-              </div>
+                <div className="mt-3 text-xs font-semibold text-slate-500 uppercase tracking-wide bg-white inline-block px-2 py-1 rounded-md border border-slate-100 shadow-sm">
+                  {Object.keys(m.days || {}).length} days configured
+                </div>
+              </motion.div>
             ))}
           </div>
         )}
-      </div>
-      {!embedded && (
-        <div style={{ marginTop: 12, textAlign: "right" }}>
-          <button style={s.primaryBtn} onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save Menu"}
+      </motion.div>
+
+      {embedded && (
+        <div className="mt-6 flex justify-end">
+          <button 
+            onClick={handleSave} 
+            disabled={saving}
+            className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-70"
+          >
+            {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+            Save Menu
           </button>
         </div>
       )}
@@ -254,16 +340,13 @@ function MessMenuManagement({ embedded = false }) {
 
 function splitMeals(str) {
   if (!str) return [];
-  return str
-    .split("+")
-    .map((t) => t.trim())
-    .filter(Boolean);
+  return str.split("+").map((t) => t.trim()).filter(Boolean);
 }
 
 function getMonday(d) {
   const date = new Date(d);
   const day = date.getDay();
-  const diff = (day === 0 ? -6 : 1) - day; // adjust when day is Sunday
+  const diff = (day === 0 ? -6 : 1) - day;
   date.setDate(date.getDate() + diff);
   return date;
 }
@@ -271,134 +354,5 @@ function getMonday(d) {
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
-const s = {
-  container: { padding: "24px", background: "#0f172a", minHeight: "100vh", color: "#e2e8f0" },
-  cardEmbed: { background: "transparent", padding: 0, color: "#0f172a" },
-  cardEmbedInner: {
-    background: "linear-gradient(135deg,#0b1224 0%, #0d172f 100%)",
-    border: "1px solid rgba(255,255,255,0.05)",
-    borderRadius: "16px",
-    padding: "16px",
-    color: "#e2e8f0",
-    boxShadow: "0 16px 38px rgba(0,0,0,0.18)",
-  },
-  topbar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "16px",
-    alignItems: "center",
-    marginBottom: "18px",
-  },
-  title: { margin: 0, fontSize: "26px", fontWeight: 800, color: "white" },
-  subtitle: { margin: "6px 0 0", color: "#94a3b8" },
-  actions: { display: "flex", gap: "10px" },
-  outlineBtn: {
-    padding: "10px 14px",
-    borderRadius: "10px",
-    border: "1px solid #334155",
-    background: "transparent",
-    color: "#e2e8f0",
-    cursor: "pointer",
-  },
-  primaryBtn: {
-    padding: "10px 16px",
-    borderRadius: "10px",
-    border: "none",
-    background: "linear-gradient(135deg,#22d3ee,#3b82f6)",
-    color: "#0b1021",
-    fontWeight: 800,
-    cursor: "pointer",
-    boxShadow: "0 12px 30px rgba(59,130,246,0.35)",
-  },
-  card: {
-    background: "linear-gradient(135deg,#0d162c 0%, #0e182f 60%, #0c1428 100%)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "16px",
-    padding: "18px",
-    marginBottom: "18px",
-    boxShadow: "0 22px 48px rgba(0,0,0,0.32)",
-  },
-  formRow: { display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" },
-  input: {
-    background: "rgba(255,255,255,0.08)",
-    color: "#e2e8f0",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "10px",
-    padding: "11px",
-    width: "100%",
-    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.25)",
-  },
-  helpText: { color: "#94a3b8", fontSize: "12px" },
-  table: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: "10px",
-    marginTop: "12px",
-  },
-  thead: {
-    display: "grid",
-    gridTemplateColumns: "140px 1fr 1fr 1fr",
-    gap: "10px",
-    color: "#cbd5e1",
-    fontWeight: 800,
-    fontSize: "13px",
-  },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "140px 1fr 1fr 1fr",
-    gap: "10px",
-    alignItems: "center",
-  },
-  dayCell: { fontWeight: 800, color: "#e2e8f0", letterSpacing: "0.3px" },
-  cell: {},
-  noteRow: { marginTop: "12px", display: "flex", alignItems: "center", gap: "10px" },
-  badge: { background: "#1d4ed8", color: "white", padding: "6px 10px", borderRadius: "999px", fontWeight: 800, fontSize: "12px" },
-  message: {
-    marginTop: "10px",
-    background: "#0f172a",
-    border: "1px solid #334155",
-    padding: "10px",
-    borderRadius: "8px",
-    color: "#e2e8f0",
-  },
-  listCard: {
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "14px",
-    padding: "16px",
-    boxShadow: "0 18px 40px rgba(0,0,0,0.25)",
-  },
-  listHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" },
-  muted: { color: "#94a3b8" },
-  menuGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "10px" },
-  menuCard: {
-    background: "#0b1329",
-    border: "1px solid #1f2937",
-    borderRadius: "12px",
-    padding: "12px",
-    cursor: "pointer",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.25)",
-  },
-  menuTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  menuWeek: { color: "white", fontWeight: 800 },
-  menuMeta: { color: "#94a3b8", fontSize: "12px" },
-  trashBtn: {
-    background: "transparent",
-    border: "1px solid #ef4444",
-    color: "#ef4444",
-    borderRadius: "8px",
-    cursor: "pointer",
-    padding: "4px 8px",
-  },
-  imagePreview: {
-    marginTop: "8px",
-    border: "1px solid #1f2937",
-    padding: "8px",
-    borderRadius: "12px",
-    background: "#0b1329",
-    display: "inline-block",
-  },
-};
 
 export default MessMenuManagement;

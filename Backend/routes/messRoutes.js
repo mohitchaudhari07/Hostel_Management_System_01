@@ -25,10 +25,11 @@ router.delete("/fees/:id", authenticate, authorize("admin"), messController.dele
 router.get("/student/:studentId/applicable-fees", authenticate, messController.getApplicableFeesForStudent);
 
 // Weekly menu endpoints
-router.post("/menus", authenticate, authorize("admin"), messController.createWeeklyMenu);
-router.get("/menus", authenticate, authorize("admin", "mess", "mess_staff"), messController.getWeeklyMenus);
+router.post("/menus", authenticate, authorize("admin", "mess", "mess_staff"), messController.createWeeklyMenu);
+router.get("/menus", authenticate, authorize("admin", "mess", "mess_staff", "student"), messController.getWeeklyMenus);
 // Update weekly menu (admin, mess, mess_staff)
 router.put("/menus/:id", authenticate, authorize("admin", "mess", "mess_staff"), messController.updateWeeklyMenu);
+router.delete("/menus/:id", authenticate, authorize("admin"), messController.deleteWeeklyMenu);
 
 // Feedback endpoints
 router.post("/feedback", authenticate, messController.createFeedback);

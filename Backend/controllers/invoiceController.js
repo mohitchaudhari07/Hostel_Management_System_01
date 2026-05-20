@@ -3,6 +3,16 @@ const MessPayment = require("../models/MessPayment");
 const MessFee = require("../models/MessFee");
 const Student = require("../models/Student");
 
+const getStudentForUser = async (user) => {
+  const student = await Student.findOne({ email: user.email });
+  if (!student) {
+    const error = new Error("Student not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  return student;
+};
+
 // Generate invoice number
 const generateInvoiceNumber = async () => {
   const year = new Date().getFullYear();
@@ -40,6 +50,10 @@ const createInvoice = async (req, res) => {
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
+    }
+
+    if (req.user.role === "student" && student.email !== req.user.email) {
+      return res.status(403).json({ message: "You can only view your own invoices" });
     }
 
     // Validate payments
@@ -153,6 +167,10 @@ const getInvoiceById = async (req, res) => {
       return res.status(404).json({ message: "Invoice not found" });
     }
 
+    if (req.user.role === "student" && invoice.studentId?.email !== req.user.email) {
+      return res.status(403).json({ message: "You can only view your own invoices" });
+    }
+
     // Increment download count
     invoice.downloadCount += 1;
     invoice.lastDownloadedAt = new Date();
@@ -248,12 +266,8 @@ const getStudentInvoices = async (req, res) => {
 // Get student invoices (for student panel)
 const getMyInvoices = async (req, res) => {
   try {
-    const studentId = req.user.id; // From auth middleware
-
-    const student = await Student.findById(studentId);
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
+    const student = await getStudentForUser(req.user);
+    const studentId = student._id;
 
     const invoices = await Invoice.find({ studentId })
       .populate("messPaymentIds")
@@ -266,7 +280,7 @@ const getMyInvoices = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching student invoices:", error);
-    res.status(500).json({ message: "Error fetching invoices", error: error.message });
+    res.status(error.statusCode || 500).json({ message: "Error fetching invoices", error: error.message });
   }
 };
 
@@ -275,7 +289,7 @@ const sendInvoiceReminder = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const invoice = await Invoice.findById(id);
+    const invoice = await Invoice.findById(id).populate("studentId");
     if (!invoice) {
       return res.status(404).json({ message: "Invoice not found" });
     }
@@ -285,8 +299,29 @@ const sendInvoiceReminder = async (req, res) => {
     invoice.lastReminderSent = new Date();
     await invoice.save();
 
-    // TODO: Send email reminder using email service
-    // await sendEmail(student.email, emailContent);
+    // Send email reminder using email service
+    if (invoice.studentId && invoice.studentId.email) {
+      const emailMessage = `
+        <h2>Invoice Reminder: ${invoice.invoiceNumber}</h2>
+        <p>Dear ${invoice.studentId.name},</p>
+        <p>This is a gentle reminder that your invoice <strong>${invoice.invoiceNumber}</strong> is due on <strong>${new Date(invoice.dueDate).toLocaleDateString()}</strong>.</p>
+        <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; margin: 15px 0;">
+          <p><strong>Total Amount:</strong> ₹${invoice.totalAmount}</p>
+          <p><strong>Amount Paid:</strong> ₹${invoice.amountPaid}</p>
+          <p><strong>Balance Due:</strong> ₹${invoice.balanceDue}</p>
+        </div>
+        <p>Please clear your pending dues as soon as possible to avoid any late fees.</p>
+        <br/>
+        <p>Best Regards,</p>
+        <p><strong>Smart Hostel Management Team</strong></p>
+      `;
+
+      await sendEmail({
+        email: invoice.studentId.email,
+        subject: `Invoice Payment Reminder - ${invoice.invoiceNumber}`,
+        html: emailMessage
+      });
+    }
 
     res.json({
       message: "Reminder sent successfully",

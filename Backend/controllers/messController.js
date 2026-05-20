@@ -193,6 +193,10 @@ const getApplicableFeesForStudent = async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
+    if (req.user.role === "student" && student.email !== req.user.email) {
+      return res.status(403).json({ message: "You can only view your own fees" });
+    }
+
     // Find applicable fees
     const fees = await MessFee.find({
       isActive: true,
@@ -237,11 +241,25 @@ async function createWeeklyMenu(req, res) {
     const { weekOf, days, specialSundayMenu, notes } = req.body;
     if (!weekOf) return res.status(400).json({ message: "Missing weekOf date" });
 
-    const existing = await WeeklyMenu.findOne({ weekOf: new Date(weekOf) });
-    if (existing) return res.status(400).json({ message: "Menu for this week already exists" });
+    const weekStart = new Date(weekOf);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const existing = await WeeklyMenu.findOne({
+      weekOf: { $gte: weekStart, $lt: weekEnd },
+    });
+
+    if (existing) {
+      existing.days = days || existing.days;
+      if (specialSundayMenu !== undefined) existing.specialSundayMenu = specialSundayMenu;
+      if (notes !== undefined) existing.notes = notes;
+      await existing.save();
+      return res.json({ message: "Weekly menu updated", menu: existing });
+    }
 
     const menu = new WeeklyMenu({
-      weekOf: new Date(weekOf),
+      weekOf: weekStart,
       days: days || {},
       specialSundayMenu: specialSundayMenu || {},
       createdBy: req.user.id,
@@ -298,14 +316,33 @@ async function updateWeeklyMenu(req, res) {
   }
 }
 
+async function deleteWeeklyMenu(req, res) {
+  try {
+    const { id } = req.params;
+    const menu = await WeeklyMenu.findByIdAndDelete(id);
+
+    if (!menu) {
+      return res.status(404).json({ message: "Weekly menu not found" });
+    }
+
+    res.json({ message: "Weekly menu deleted", menu });
+  } catch (error) {
+    console.error("Error deleting weekly menu:", error);
+    res.status(500).json({ message: "Error deleting weekly menu", error: error.message });
+  }
+}
+
 // Create feedback (students)
 async function createFeedback(req, res) {
   try {
     const { rating, comment, category } = req.body;
     if (!rating || rating < 1 || rating > 5) return res.status(400).json({ message: "Invalid rating" });
+    const student = req.user.role === "student"
+      ? await Student.findOne({ email: req.user.email })
+      : null;
 
     const fb = new Feedback({
-      studentId: req.user.role === 'student' ? req.user.id : undefined,
+      studentId: student?._id,
       userId: req.user.id,
       rating,
       comment: comment || "",
@@ -542,6 +579,7 @@ module.exports = {
   createWeeklyMenu,
   getWeeklyMenus,
   updateWeeklyMenu,
+  deleteWeeklyMenu,
   createFeedback,
   getFeedbacks,
   assignMessManager,

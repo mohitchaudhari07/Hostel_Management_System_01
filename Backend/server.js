@@ -1,16 +1,34 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const cors = require("cors");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept, X-User-Id, X-User-Role",
+  );
 
-mongoose.connect(process.env.MONGO_URI)
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
+
+app.use(express.json());
+app.use(cookieParser());
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log(err));
+  .catch((err) => console.log("MongoDB Connection Error:", err));
 
 // ROUTES
 const authRoutes = require("./routes/authRoutes");
@@ -40,6 +58,12 @@ app.use("/api/mess/analytics", messAnalyticsRoutes);
 
 const paymentGatewayRoutes = require("./routes/paymentGatewayRoutes");
 app.use("/api/payments", paymentGatewayRoutes);
+
+const complaintRoutes = require("./routes/complaintRoutes");
+app.use("/api/complaints", complaintRoutes);
+
+const messRecommendationRoutes = require("./routes/messRecommendationRoutes");
+app.use("/api/mess-ai", messRecommendationRoutes);
 
 // Initialize cron jobs
 require("./cronJobs");

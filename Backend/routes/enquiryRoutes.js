@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { authenticate, authorize } = require("../middleware/auth");
 
 const {
   createEnquiry,
@@ -13,11 +14,11 @@ const {
 router.post("/", createEnquiry);
 
 // Admin
-router.get("/", getAllEnquiries);
-router.put("/:id", updateEnquiry);
-router.delete("/:id", deleteEnquiry);
+router.get("/", authenticate, authorize("admin"), getAllEnquiries);
+router.put("/:id", authenticate, authorize("admin"), updateEnquiry);
+router.delete("/:id", authenticate, authorize("admin"), deleteEnquiry);
 
 // ✅ Convert Route
-router.post("/convert/:id", convertToStudent);
+router.post("/convert/:id", authenticate, authorize("admin"), convertToStudent);
 
 module.exports = router;

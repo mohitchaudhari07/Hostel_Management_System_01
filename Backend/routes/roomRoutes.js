@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { authenticate, authorize } = require("../middleware/auth");
 
 const {
   createRoom,
@@ -13,15 +14,15 @@ const {
 } = require("../controllers/roomController");
 
 // Admin routes for room management
-router.post("/", createRoom);
-router.get("/", getAllRooms);
-router.get("/available", getAvailableRooms);
-router.get("/:id", getRoomById);
-router.put("/:id", updateRoom);
-router.delete("/:id", deleteRoom);
+router.post("/", authenticate, authorize("admin"), createRoom);
+router.get("/", authenticate, authorize("admin"), getAllRooms);
+router.get("/available", authenticate, authorize("admin"), getAvailableRooms);
+router.get("/:id", authenticate, authorize("admin"), getRoomById);
+router.put("/:id", authenticate, authorize("admin"), updateRoom);
+router.delete("/:id", authenticate, authorize("admin"), deleteRoom);
 
 // Room assignment routes
-router.post("/assign", assignRoomToStudent);
-router.post("/unassign", unassignRoomFromStudent);
+router.post("/assign", authenticate, authorize("admin"), assignRoomToStudent);
+router.post("/unassign", authenticate, authorize("admin"), unassignRoomFromStudent);
 
 module.exports = router;

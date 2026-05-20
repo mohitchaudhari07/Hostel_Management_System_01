@@ -4,6 +4,16 @@ const Invoice = require("../models/Invoice");
 const MessTransaction = require("../models/MessTransaction");
 const Student = require("../models/Student");
 
+const getStudentForUser = async (user) => {
+  const student = await Student.findOne({ email: user.email });
+  if (!student) {
+    const error = new Error("Student not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  return student;
+};
+
 // Create payment record (admin)
 const createPaymentRecord = async (req, res) => {
   try {
@@ -25,6 +35,10 @@ const createPaymentRecord = async (req, res) => {
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
+    }
+
+    if (req.user.role === "student" && student.email !== req.user.email) {
+      return res.status(403).json({ message: "You can only view your own payment history" });
     }
 
     // Validate mess fee exists
@@ -145,6 +159,10 @@ const getPaymentById = async (req, res) => {
       return res.status(404).json({ message: "Payment not found" });
     }
 
+    if (req.user.role === "student" && payment.studentId?.email !== req.user.email) {
+      return res.status(403).json({ message: "You can only view your own payments" });
+    }
+
     res.json({
       message: "Payment fetched",
       payment
@@ -237,12 +255,7 @@ const getStudentPaymentHistory = async (req, res) => {
 // Get student payment details (for student panel)
 const getStudentPaymentDetails = async (req, res) => {
   try {
-    const studentId = req.user.id; // From auth middleware
-
-    const student = await Student.findById(studentId);
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
+    const student = await getStudentForUser(req.user);
 
     // Get current mess fee details
     const currentMessFee = await MessFee.findOne({ 
@@ -285,20 +298,16 @@ const getStudentPaymentDetails = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching student payment details:", error);
-    res.status(500).json({ message: "Error fetching payment details", error: error.message });
+    res.status(error.statusCode || 500).json({ message: "Error fetching payment details", error: error.message });
   }
 };
 
 // Process student payment
 const processStudentPayment = async (req, res) => {
   try {
-    const studentId = req.user.id; // From auth middleware
     const { amount, paymentMethod, transactionId, paymentType = "total", notes = "" } = req.body;
-
-    const student = await Student.findById(studentId);
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
+    const student = await getStudentForUser(req.user);
+    const studentId = student._id;
 
     if (student.paymentStatus === "paid") {
       return res.status(400).json({ message: "Payment already completed" });
@@ -407,7 +416,7 @@ const processStudentPayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Error processing student payment:", error);
-    res.status(500).json({ message: "Error processing payment", error: error.message });
+    res.status(error.statusCode || 500).json({ message: "Error processing payment", error: error.message });
   }
 };
 

@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Users, Search, Filter, AlertCircle, RefreshCw, X,
+  GraduationCap, Home, Bed, Phone, Calendar, Banknote, CreditCard, Clock, CheckCircle2,
+  AlertTriangle
+} from "lucide-react";
 
-function StudentManagement() {
+export default function StudentManagement() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -11,9 +17,7 @@ function StudentManagement() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [paymentForm, setPaymentForm] = useState({
-    hostelFeeAmount: "",
-    messFeeAmount: "",
-    paymentDueDate: ""
+    hostelFeeAmount: "", messFeeAmount: "", paymentDueDate: ""
   });
 
   useEffect(() => {
@@ -23,8 +27,9 @@ function StudentManagement() {
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const response = await axios.get("http://localhost:5000/api/auth/students");
+      const response = await axios.get("/auth/students");
       setStudents(response.data);
+      setError(null);
     } catch (error) {
       console.error("Error fetching students:", error);
       setError("Failed to load students");
@@ -36,778 +41,262 @@ function StudentManagement() {
   const handleSendPaymentDetails = (student) => {
     setSelectedStudent(student);
     setPaymentForm({
-      hostelFeeAmount: "",
-      messFeeAmount: "",
-      paymentDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 30 days from now
+      hostelFeeAmount: "", messFeeAmount: "",
+      paymentDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     });
     setShowPaymentModal(true);
   };
 
   const handleSubmitPaymentDetails = async () => {
-    if (!paymentForm.hostelFeeAmount || !paymentForm.messFeeAmount || !paymentForm.paymentDueDate) {
-      alert("Please fill in all required fields");
-      return;
-    }
-
+    if (!paymentForm.hostelFeeAmount || !paymentForm.messFeeAmount || !paymentForm.paymentDueDate) return alert("Please fill in all required fields");
     try {
-      const user = JSON.parse(localStorage.getItem("user"));
-      if (!user) {
-        alert("Authentication required. Please login again.");
-        return;
-      }
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!user.id) return alert("Authentication required. Please login again.");
 
       await axios.post(
-        `http://localhost:5000/api/payments/student/${selectedStudent._id}/send-payment-details`,
-        {
-          hostelFeeAmount: parseFloat(paymentForm.hostelFeeAmount),
-          messFeeAmount: parseFloat(paymentForm.messFeeAmount),
-          paymentDueDate: paymentForm.paymentDueDate
-        },
-        {
-          headers: {
-            "x-user-id": user.id,
-            "x-user-role": user.role
-          }
-        }
+        `/payments/student/${selectedStudent._id}/send-payment-details`,
+        { hostelFeeAmount: parseFloat(paymentForm.hostelFeeAmount), messFeeAmount: parseFloat(paymentForm.messFeeAmount), paymentDueDate: paymentForm.paymentDueDate },
+        { headers: { "x-user-id": user.id, "x-user-role": user.role } }
       );
-
-      alert("Payment details sent successfully!");
       setShowPaymentModal(false);
       setSelectedStudent(null);
       fetchStudents();
-    } catch (error) {
-      alert("Error sending payment details: " + (error.response?.data?.message || "Unknown error"));
-    }
+    } catch (error) { alert("Error sending payment details: " + (error.response?.data?.message || "Unknown error")); }
   };
 
   const handleUnassignRoom = async (studentId) => {
     if (!confirm("Are you sure you want to unassign this student's room?")) return;
-
     try {
-      await axios.post("http://localhost:5000/api/rooms/unassign", {
-        studentId
-      });
-      alert("Room unassigned successfully!");
+      await axios.post("/rooms/unassign", { studentId });
       fetchStudents();
-    } catch (error) {
-      alert("Error unassigning room: " + (error.response?.data?.message || "Unknown error"));
-    }
+    } catch (error) { alert("Error unassigning room: " + (error.response?.data?.message || "Unknown error")); }
   };
 
   const filteredStudents = students.filter(student => {
-    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (student.roomNumber && student.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesRoomFilter = filterStatus === "all" ||
-                             (filterStatus === "assigned" && student.isRoomAssigned) ||
-                             (filterStatus === "unassigned" && !student.isRoomAssigned);
-
-    const matchesPaymentFilter = filterPaymentStatus === "all" ||
-                                student.paymentStatus === filterPaymentStatus;
-
+    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) || student.email.toLowerCase().includes(searchTerm.toLowerCase()) || (student.roomNumber && student.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesRoomFilter = filterStatus === "all" || (filterStatus === "assigned" && student.isRoomAssigned) || (filterStatus === "unassigned" && !student.isRoomAssigned);
+    const matchesPaymentFilter = filterPaymentStatus === "all" || student.paymentStatus === filterPaymentStatus;
     return matchesSearch && matchesRoomFilter && matchesPaymentFilter;
   });
 
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
-        <p>Loading students...</p>
-      </div>
-    );
-  }
+  const getPaymentStatusBadge = (status) => {
+    const badges = {
+      "paid": <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><CheckCircle2 size={14}/> Paid</span>,
+      "partial": <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><CreditCard size={14}/> Partial</span>,
+      "pending": <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Clock size={14}/> Pending</span>,
+      "overdue": <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><AlertTriangle size={14}/> Overdue</span>,
+      "not_assigned": <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Banknote size={14}/> Not Sent</span>
+    };
+    return badges[status] || badges["not_assigned"];
+  };
 
-  if (error) {
-    return (
-      <div style={styles.errorContainer}>
-        <div style={styles.errorIcon}>⚠️</div>
-        <h3>Failed to Load Students</h3>
-        <p>{error}</p>
-        <button style={styles.retryBtn} onClick={fetchStudents}>
-          Retry
-        </button>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm">
+      <RefreshCw className="animate-spin text-blue-600 mb-4" size={48} />
+      <p className="text-slate-500 font-medium">Loading students...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-red-200 shadow-sm text-center">
+      <AlertCircle className="text-red-500 mb-4" size={64} />
+      <h3 className="text-2xl font-bold text-slate-800 mb-2">Failed to Load Students</h3>
+      <p className="text-slate-500 mb-6">{error}</p>
+      <button onClick={fetchStudents} className="px-6 py-3 bg-red-50 text-red-700 font-bold rounded-xl hover:bg-red-100 transition-colors">Retry</button>
+    </div>
+  );
 
   return (
-    <div style={styles.container}>
-      {/* Controls */}
-      <div style={styles.controls}>
-        <div style={styles.searchBox}>
-          <input
-            type="text"
-            placeholder="Search by name, email, or room..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={styles.searchInput}
-          />
-          <span style={styles.searchIcon}>🔍</span>
-        </div>
+    <div className="space-y-6 font-sans">
+      
 
-        <div style={styles.filterBox}>
-          <label style={styles.filterLabel}>Room Status:</label>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            style={styles.filterSelect}
-          >
-            <option value="all">All Students</option>
-            <option value="assigned">Room Assigned</option>
-            <option value="unassigned">No Room</option>
-          </select>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input type="text" placeholder="Search by name, email, or room..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-700" />
         </div>
-
-        <div style={styles.filterBox}>
-          <label style={styles.filterLabel}>Payment Status:</label>
-          <select
-            value={filterPaymentStatus}
-            onChange={(e) => setFilterPaymentStatus(e.target.value)}
-            style={styles.filterSelect}
-          >
-            <option value="all">All Payments</option>
-            <option value="not_assigned">Not Assigned</option>
-            <option value="pending">Pending</option>
-            <option value="partial">Partial</option>
-            <option value="paid">Paid</option>
-            <option value="overdue">Overdue</option>
-          </select>
+        <div className="flex gap-4">
+          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
+            <Home size={18} className="text-slate-400" />
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-transparent outline-none text-slate-700 font-semibold py-1.5 cursor-pointer">
+              <option value="all">All Rooms</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
+            <Banknote size={18} className="text-slate-400" />
+            <select value={filterPaymentStatus} onChange={(e) => setFilterPaymentStatus(e.target.value)} className="bg-transparent outline-none text-slate-700 font-semibold py-1.5 cursor-pointer">
+              <option value="all">All Payments</option>
+              <option value="not_assigned">Not Assigned</option>
+              <option value="pending">Pending</option>
+              <option value="partial">Partial</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Statistics */}
-      <div style={styles.stats}>
-        <div style={styles.statCard}>
-          <h3>{students.length}</h3>
-          <p>Total Students</p>
-        </div>
-        <div style={styles.statCard}>
-          <h3>{students.filter(s => s.isRoomAssigned).length}</h3>
-          <p>Room Assigned</p>
-        </div>
-        <div style={styles.statCard}>
-          <h3>{students.filter(s => !s.isRoomAssigned).length}</h3>
-          <p>Waiting for Room</p>
-        </div>
-        <div style={styles.statCard}>
-          <h3>{students.filter(s => s.paymentStatus === "not_assigned").length}</h3>
-          <p>Payment Not Sent</p>
-        </div>
-        <div style={styles.statCard}>
-          <h3>{students.filter(s => s.paymentStatus === "paid").length}</h3>
-          <p>Payment Complete</p>
-        </div>
-        <div style={styles.statCard}>
-          <h3>{students.filter(s => s.paymentStatus === "pending" || s.paymentStatus === "partial" || s.paymentStatus === "overdue").length}</h3>
-          <p>Payment Pending</p>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { label: "Total Students", value: students.length, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "Room Assigned", value: students.filter(s => s.isRoomAssigned).length, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: "Waiting Room", value: students.filter(s => !s.isRoomAssigned).length, color: "text-amber-600", bg: "bg-amber-50" },
+          { label: "Payment Not Sent", value: students.filter(s => s.paymentStatus === "not_assigned").length, color: "text-slate-600", bg: "bg-slate-100" },
+          { label: "Payment Complete", value: students.filter(s => s.paymentStatus === "paid").length, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: "Payment Pending", value: students.filter(s => ["pending", "partial", "overdue"].includes(s.paymentStatus)).length, color: "text-red-600", bg: "bg-red-50" }
+        ].map((stat, idx) => (
+          <div key={idx} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center">
+            <p className={`text-2xl font-black ${stat.color}`}>{stat.value}</p>
+            <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">{stat.label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Students List */}
-      <div style={styles.studentsGrid}>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredStudents.length === 0 ? (
-          <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>👥</div>
-            <h3>No students found</h3>
-            <p>Try adjusting your search or filter criteria</p>
+          <div className="col-span-full py-20 bg-white rounded-2xl border border-slate-200 shadow-sm text-center">
+            <Users className="mx-auto text-slate-300 mb-4" size={64} />
+            <h3 className="text-xl font-bold text-slate-800">No students found</h3>
+            <p className="text-slate-500">Try adjusting your search or filter criteria.</p>
           </div>
         ) : (
           filteredStudents.map(student => (
-            <div key={student._id} style={styles.studentCard}>
-              <div style={styles.studentHeader}>
-                <div style={styles.studentAvatar}>
-                  <span style={styles.avatarText}>
-                    {student.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                  </span>
+            <motion.div key={student._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-slate-100 flex items-start gap-4">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
+                  {student.name.substring(0, 2).toUpperCase()}
                 </div>
-                <div style={styles.studentInfo}>
-                  <h3 style={styles.studentName}>{student.name}</h3>
-                  <p style={styles.studentEmail}>{student.email}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-bold text-slate-800 truncate">{student.name}</h3>
+                  <p className="text-sm font-medium text-slate-500 truncate">{student.email}</p>
+                  <div className="flex gap-2 mt-2">
+                    {student.isRoomAssigned ? (
+                      <span className="bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                        <Home size={12}/> Room {student.roomNumber}
+                      </span>
+                    ) : (
+                      <span className="bg-slate-100 text-slate-500 px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                        <Home size={12}/> No Room
+                      </span>
+                    )}
+                    {getPaymentStatusBadge(student.paymentStatus)}
+                  </div>
                 </div>
-                <div style={styles.roomStatus}>
-                  {student.isRoomAssigned ? (
-                    <span style={styles.assignedBadge}>🏠 Room {student.roomNumber}</span>
-                  ) : (
-                    <span style={styles.unassignedBadge}>⏳ No Room</span>
+              </div>
+
+              <div className="p-5 flex-1 bg-slate-50/50">
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium flex items-center gap-2"><Phone size={14}/> Phone</span>
+                    <span className="font-semibold text-slate-800">{student.phone || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium flex items-center gap-2"><GraduationCap size={14}/> Course</span>
+                    <span className="font-semibold text-slate-800">{student.course || "N/A"}</span>
+                  </div>
+                  {student.isRoomAssigned && (
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100 bg-indigo-50/50 -mx-5 px-5 py-2">
+                      <span className="text-indigo-600 font-medium flex items-center gap-2"><Bed size={14}/> Allocation</span>
+                      <span className="font-bold text-indigo-800">Bed {student.bedId} (Fl: {student.floor}, Bl: {student.block})</span>
+                    </div>
                   )}
-                </div>
-                <div style={styles.paymentStatus}>
-                  {student.paymentStatus === "paid" ? (
-                    <span style={styles.paymentBadgePaid}>💰 Paid</span>
-                  ) : student.paymentStatus === "partial" ? (
-                    <span style={styles.paymentBadgePartial}>💰 Partial</span>
-                  ) : student.paymentStatus === "pending" ? (
-                    <span style={styles.paymentBadgePending}>💰 Pending</span>
-                  ) : student.paymentStatus === "overdue" ? (
-                    <span style={styles.paymentBadgeOverdue}>💰 Overdue</span>
-                  ) : (
-                    <span style={styles.paymentBadgeNotAssigned}>📝 Not Sent</span>
+                  {student.paymentStatus !== "not_assigned" && (
+                    <div className="space-y-2 pt-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500">Hostel Fee</span>
+                        <span className="font-semibold">₹{student.hostelFeeAmount}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500">Mess Fee</span>
+                        <span className="font-semibold">₹{student.messFeeAmount}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-slate-100 p-2 rounded-lg mt-1">
+                        <span className="font-bold text-slate-700">Total Due</span>
+                        <span className="font-black text-red-600">₹{student.amountDue}</span>
+                      </div>
+                      <div className="text-right text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                        Due: {student.paymentDueDate ? new Date(student.paymentDueDate).toLocaleDateString() : "N/A"}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div style={styles.studentDetails}>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailLabel}>Phone:</span>
-                  <span style={styles.detailValue}>{student.phone || "Not provided"}</span>
-                </div>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailLabel}>Course:</span>
-                  <span style={styles.detailValue}>{student.course || "Not specified"}</span>
-                </div>
-                {student.isRoomAssigned && (
-                  <>
-                    <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Bed:</span>
-                      <span style={styles.detailValue}>{student.bedId}</span>
-                    </div>
-                    <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Floor/Block:</span>
-                      <span style={styles.detailValue}>Floor {student.floor}, Block {student.block}</span>
-                    </div>
-                    <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Assigned:</span>
-                      <span style={styles.detailValue}>
-                        {student.roomAssignedDate ? new Date(student.roomAssignedDate).toLocaleDateString() : "N/A"}
-                      </span>
-                    </div>
-                  </>
-                )}
-                <div style={styles.detailRow}>
-                  <span style={styles.detailLabel}>Registered:</span>
-                  <span style={styles.detailValue}>
-                    {student.createdAt ? new Date(student.createdAt).toLocaleDateString() : "N/A"}
-                  </span>
-                </div>
-                {student.paymentStatus !== "not_assigned" && (
-                  <>
-                    <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Hostel Fee:</span>
-                      <span style={styles.detailValue}>₹{student.hostelFeeAmount}</span>
-                    </div>
-                    <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Mess Fee:</span>
-                      <span style={styles.detailValue}>₹{student.messFeeAmount}</span>
-                    </div>
-                    <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Total Due:</span>
-                      <span style={styles.detailValue}>₹{student.amountDue}</span>
-                    </div>
-                    <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Due Date:</span>
-                      <span style={styles.detailValue}>
-                        {student.paymentDueDate ? new Date(student.paymentDueDate).toLocaleDateString() : "N/A"}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div style={styles.cardActions}>
-                {student.paymentStatus === "not_assigned" && (
-                  <button
-                    style={styles.sendPaymentBtn}
-                    onClick={() => handleSendPaymentDetails(student)}
-                  >
-                    💰 Send Payment Details
+              <div className="p-4 border-t border-slate-100 bg-white grid grid-cols-2 gap-2">
+                {student.paymentStatus === "not_assigned" ? (
+                  <button onClick={() => handleSendPaymentDetails(student)} className="col-span-2 py-2 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
+                    <Banknote size={16} /> Send Payment Details
+                  </button>
+                ) : (
+                  <button className="col-span-2 py-2 bg-slate-50 text-slate-400 font-bold rounded-xl cursor-not-allowed flex items-center justify-center gap-2">
+                    <CheckCircle2 size={16} /> Payment Sent
                   </button>
                 )}
+                
                 {student.isRoomAssigned && (
-                  <button
-                    style={styles.unassignBtn}
-                    onClick={() => handleUnassignRoom(student._id)}
-                  >
-                    🗑️ Unassign Room
+                  <button onClick={() => handleUnassignRoom(student._id)} className="col-span-2 py-2 mt-2 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
+                    <X size={16} /> Unassign Room
                   </button>
                 )}
               </div>
-            </div>
+            </motion.div>
           ))
         )}
       </div>
 
-      {/* Payment Details Modal */}
-      {showPaymentModal && selectedStudent && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Send Payment Details</h3>
-              <button
-                style={styles.closeBtn}
-                onClick={() => setShowPaymentModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={styles.modalBody}>
-              <div style={styles.studentInfo}>
-                <h4>{selectedStudent.name}</h4>
-                <p>{selectedStudent.email}</p>
-                <p>Room Type: {selectedStudent.roomType}</p>
+      <AnimatePresence>
+        {showPaymentModal && selectedStudent && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-white p-8 rounded-2xl w-full max-w-md shadow-2xl overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Banknote className="text-emerald-600" /> Payment Details
+                </h3>
+                <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                  <X size={24} />
+                </button>
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Hostel Fee Amount (₹)</label>
-                <input
-                  type="number"
-                  value={paymentForm.hostelFeeAmount}
-                  onChange={(e) => setPaymentForm({...paymentForm, hostelFeeAmount: e.target.value})}
-                  style={styles.formInput}
-                  placeholder="Enter hostel fee amount"
-                  min="0"
-                  step="0.01"
-                />
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                  {selectedStudent.name.substring(0,2).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800 leading-tight">{selectedStudent.name}</p>
+                  <p className="text-xs text-slate-500">{selectedStudent.email}</p>
+                </div>
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Mess Fee Amount (₹)</label>
-                <input
-                  type="number"
-                  value={paymentForm.messFeeAmount}
-                  onChange={(e) => setPaymentForm({...paymentForm, messFeeAmount: e.target.value})}
-                  style={styles.formInput}
-                  placeholder="Enter mess fee amount"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Hostel Fee (₹)</label>
+                  <input type="number" value={paymentForm.hostelFeeAmount} onChange={(e) => setPaymentForm({...paymentForm, hostelFeeAmount: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Mess Fee (₹)</label>
+                  <input type="number" value={paymentForm.messFeeAmount} onChange={(e) => setPaymentForm({...paymentForm, messFeeAmount: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Due Date</label>
+                  <input type="date" value={paymentForm.paymentDueDate} onChange={(e) => setPaymentForm({...paymentForm, paymentDueDate: e.target.value})} min={new Date().toISOString().split('T')[0]} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Payment Due Date</label>
-                <input
-                  type="date"
-                  value={paymentForm.paymentDueDate}
-                  onChange={(e) => setPaymentForm({...paymentForm, paymentDueDate: e.target.value})}
-                  style={styles.formInput}
-                  min={new Date().toISOString().split('T')[0]}
-                />
-              </div>
+                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center mt-2">
+                  <p className="text-sm font-semibold text-emerald-700">Total Amount Due</p>
+                  <p className="text-3xl font-black text-emerald-600">₹{(parseFloat(paymentForm.hostelFeeAmount || 0) + parseFloat(paymentForm.messFeeAmount || 0)).toFixed(2)}</p>
+                </div>
 
-              <div style={styles.totalAmount}>
-                <strong>Total Amount: ₹{(parseFloat(paymentForm.hostelFeeAmount || 0) + parseFloat(paymentForm.messFeeAmount || 0)).toFixed(2)}</strong>
+                <div className="flex gap-3 pt-4 border-t border-slate-100">
+                  <button onClick={handleSubmitPaymentDetails} className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">Send to Student</button>
+                  <button onClick={() => setShowPaymentModal(false)} className="flex-1 bg-slate-100 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors">Cancel</button>
+                </div>
               </div>
-            </div>
-            <div style={styles.modalFooter}>
-              <button
-                style={styles.cancelBtn}
-                onClick={() => setShowPaymentModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                style={styles.submitBtn}
-                onClick={handleSubmitPaymentDetails}
-              >
-                Send Payment Details
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "30px"
-  },
-
-  loadingContainer: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "60px",
-    textAlign: "center"
-  },
-
-  spinner: {
-    width: "50px",
-    height: "50px",
-    border: "4px solid #f3f3f3",
-    borderTop: "4px solid #667eea",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-    marginBottom: "20px"
-  },
-
-  errorContainer: {
-    textAlign: "center",
-    padding: "60px",
-    background: "rgba(255, 255, 255, 0.9)",
-    borderRadius: "20px",
-    border: "1px solid rgba(231, 76, 60, 0.2)"
-  },
-
-  errorIcon: {
-    fontSize: "60px",
-    marginBottom: "20px"
-  },
-
-  retryBtn: {
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    color: "white",
-    border: "none",
-    padding: "12px 24px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontSize: "16px",
-    fontWeight: "600",
-    marginTop: "20px"
-  },
-
-  controls: {
-    display: "flex",
-    gap: "20px",
-    alignItems: "center",
-    flexWrap: "wrap"
-  },
-
-  searchBox: {
-    position: "relative",
-    flex: 1,
-    minWidth: "300px"
-  },
-
-  searchInput: {
-    width: "100%",
-    padding: "12px 45px 12px 15px",
-    borderRadius: "10px",
-    border: "2px solid #e1e8ed",
-    fontSize: "16px",
-    outline: "none",
-    transition: "border-color 0.3s ease",
-    "&:focus": {
-      borderColor: "#667eea"
-    }
-  },
-
-  searchIcon: {
-    position: "absolute",
-    right: "15px",
-    top: "50%",
-    transform: "translateY(-50%)",
-    color: "#667eea",
-    fontSize: "18px"
-  },
-
-  filterBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px"
-  },
-
-  filterLabel: {
-    fontSize: "16px",
-    fontWeight: "600",
-    color: "#2c3e50"
-  },
-
-  filterSelect: {
-    padding: "10px 15px",
-    borderRadius: "8px",
-    border: "2px solid #e1e8ed",
-    fontSize: "16px",
-    outline: "none",
-    cursor: "pointer"
-  },
-
-  stats: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-    gap: "20px"
-  },
-
-  statCard: {
-    background: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(10px)",
-    padding: "25px",
-    borderRadius: "15px",
-    textAlign: "center",
-    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
-    border: "1px solid rgba(255, 255, 255, 0.2)"
-  },
-
-  studentsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
-    gap: "25px"
-  },
-
-  emptyState: {
-    gridColumn: "1 / -1",
-    textAlign: "center",
-    padding: "80px 40px",
-    background: "rgba(255, 255, 255, 0.95)",
-    borderRadius: "20px",
-    border: "2px dashed #e1e8ed"
-  },
-
-  emptyIcon: {
-    fontSize: "60px",
-    marginBottom: "20px"
-  },
-
-  studentCard: {
-    background: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(10px)",
-    borderRadius: "20px",
-    padding: "25px",
-    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
-    border: "1px solid rgba(255, 255, 255, 0.2)",
-    transition: "all 0.3s ease",
-    "&:hover": {
-      transform: "translateY(-5px)",
-      boxShadow: "0 15px 40px rgba(0, 0, 0, 0.15)"
-    }
-  },
-
-  studentHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "15px",
-    marginBottom: "20px"
-  },
-
-  studentAvatar: {
-    width: "60px",
-    height: "60px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)"
-  },
-
-  avatarText: {
-    color: "white",
-    fontSize: "20px",
-    fontWeight: "700"
-  },
-
-  studentInfo: {
-    flex: 1
-  },
-
-  studentName: {
-    fontSize: "20px",
-    fontWeight: "700",
-    color: "#2c3e50",
-    margin: "0 0 5px 0"
-  },
-
-  studentEmail: {
-    fontSize: "14px",
-    color: "#7f8c8d",
-    margin: 0
-  },
-
-  roomStatus: {
-    textAlign: "right"
-  },
-
-  assignedBadge: {
-    background: "linear-gradient(135deg, #27ae60, #2ecc71)",
-    color: "white",
-    padding: "6px 12px",
-    borderRadius: "20px",
-    fontSize: "12px",
-    fontWeight: "600"
-  },
-
-  unassignedBadge: {
-    background: "linear-gradient(135deg, #f39c12, #e67e22)",
-    color: "white",
-    padding: "6px 12px",
-    borderRadius: "20px",
-    fontSize: "12px",
-    fontWeight: "600"
-  },
-
-  studentDetails: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    marginBottom: "20px"
-  },
-
-  detailRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "8px 0",
-    borderBottom: "1px solid rgba(0, 0, 0, 0.05)"
-  },
-
-  detailLabel: {
-    fontSize: "14px",
-    fontWeight: "600",
-    color: "#2c3e50"
-  },
-
-  detailValue: {
-    fontSize: "14px",
-    color: "#667eea",
-    fontWeight: "500"
-  },
-
-  cardActions: {
-    borderTop: "1px solid rgba(0, 0, 0, 0.1)",
-    paddingTop: "15px"
-  },
-
-  sendPaymentBtn: {
-    background: "linear-gradient(135deg, #10b981, #059669)",
-    color: "white",
-    border: "none",
-    padding: "10px 20px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "600",
-    width: "100%",
-    marginBottom: "10px",
-    transition: "all 0.3s ease",
-    "&:hover": {
-      transform: "translateY(-2px)",
-      boxShadow: "0 4px 15px rgba(16, 185, 129, 0.3)"
-    }
-  },
-
-  unassignBtn: {
-    background: "linear-gradient(135deg, #e74c3c, #c0392b)",
-    color: "white",
-    border: "none",
-    padding: "10px 20px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "600",
-    width: "100%",
-    transition: "all 0.3s ease",
-    "&:hover": {
-      transform: "translateY(-2px)",
-      boxShadow: "0 4px 15px rgba(231, 76, 60, 0.3)"
-    }
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modal: {
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    width: '90%',
-    maxWidth: '500px',
-    maxHeight: '90vh',
-    overflow: 'auto',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-  },
-  modalHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '20px',
-    borderBottom: '1px solid #e5e7eb',
-  },
-  modalTitle: {
-    margin: 0,
-    fontSize: '1.25rem',
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  closeBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: '1.5rem',
-    cursor: 'pointer',
-    color: '#6b7280',
-    padding: '0',
-    width: '30px',
-    height: '30px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: '4px',
-  },
-  modalBody: {
-    padding: '20px',
-  },
-  studentInfo: {
-    marginBottom: '20px',
-    padding: '15px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '6px',
-    border: '1px solid #e5e7eb',
-  },
-  formGroup: {
-    marginBottom: '15px',
-  },
-  formLabel: {
-    display: 'block',
-    marginBottom: '5px',
-    fontWeight: '500',
-    color: '#374151',
-  },
-  formInput: {
-    width: '100%',
-    padding: '10px',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-    fontSize: '1rem',
-    boxSizing: 'border-box',
-  },
-  totalAmount: {
-    marginTop: '20px',
-    padding: '15px',
-    backgroundColor: '#ecfdf5',
-    border: '1px solid #d1fae5',
-    borderRadius: '6px',
-    textAlign: 'center',
-    color: '#065f46',
-    fontSize: '1.1rem',
-  },
-  modalFooter: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '10px',
-    padding: '20px',
-    borderTop: '1px solid #e5e7eb',
-  },
-  cancelBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#f3f4f6',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '1rem',
-    color: '#374151',
-  },
-  submitBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#3b82f6',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '1rem',
-    color: 'white',
-    fontWeight: '500',
-  },
-};
-
-export default StudentManagement;

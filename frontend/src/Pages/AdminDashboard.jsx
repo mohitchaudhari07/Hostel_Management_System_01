@@ -1,5 +1,25 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { motion } from "framer-motion";
+import {
+  LayoutDashboard,
+  Mail,
+  BedDouble,
+  GraduationCap,
+  Users,
+  Camera,
+  ScanFace,
+  BarChart,
+  Utensils,
+  Settings,
+  AlertCircle,
+  Loader2,
+  Building,
+  CheckCircle,
+  Sparkles,
+} from "lucide-react";
+import MessSmartAdmin from "./MessSmartAdmin";
+import DashboardLayout from "../components/layout/DashboardLayout";
 import AdminEnquiries from "./AdminEnquiries";
 import RoomManagement from "./RoomManagement";
 import StudentManagement from "./StudentManagement";
@@ -9,8 +29,9 @@ import AttendanceAnalytics from "./AttendanceAnalytics";
 import MessDashboard from "./MessDashboard";
 import MessAdminPanel from "./MessAdminPanel";
 import UserManagement from "./UserManagement";
+import AdminComplaints from "./AdminComplaints";
 
-function AdminDashboard() {
+export default function AdminDashboard() {
   const [activePage, setActivePage] = useState("dashboard");
   const [stats, setStats] = useState({
     totalEnquiries: 0,
@@ -18,40 +39,54 @@ function AdminDashboard() {
     approvedStudents: 0,
     availableRooms: 0,
     totalRooms: 0,
-    occupiedRooms: 0
+    occupiedRooms: 0,
+    unreadComplaints: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   useEffect(() => {
     if (activePage === "dashboard") {
       fetchDashboardStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage]);
 
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Fetch all required data in parallel
-      const [enquiriesRes, roomsRes, studentsRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/enquiries"),
-        axios.get("http://localhost:5000/api/rooms"),
-        axios.get("http://localhost:5000/api/auth/students")
-      ]);
+      const [enquiriesRes, roomsRes, studentsRes, complaintsRes] =
+        await Promise.all([
+          axios.get("/enquiries"),
+          axios.get("/rooms"),
+          axios.get("/auth/students"),
+          axios
+            .get("/complaints/unread-count", {
+              headers: { "x-user-id": user.id, "x-user-role": user.role },
+            })
+            .catch(() => ({ data: { count: 0 } })),
+        ]);
 
       const enquiries = enquiriesRes.data;
       const rooms = roomsRes.data;
       const students = studentsRes.data;
 
-      // Calculate statistics
       const totalEnquiries = enquiries.length;
-      const newEnquiries = enquiries.filter(enq => enq.status === "New").length;
-      const approvedStudents = students.filter(student => student.isRoomAssigned).length;
-      const availableRooms = rooms.filter(room => room.availableBeds > 0).length;
+      const newEnquiries = enquiries.filter(
+        (enq) => enq.status === "New",
+      ).length;
+      const approvedStudents = students.filter(
+        (student) => student.isRoomAssigned,
+      ).length;
+      const availableRooms = rooms.filter(
+        (room) => room.availableBeds > 0,
+      ).length;
       const totalRooms = rooms.length;
       const occupiedRooms = totalRooms - availableRooms;
+      const unreadComplaints = complaintsRes.data.count || 0;
 
       setStats({
         totalEnquiries,
@@ -59,7 +94,8 @@ function AdminDashboard() {
         approvedStudents,
         availableRooms,
         totalRooms,
-        occupiedRooms
+        occupiedRooms,
+        unreadComplaints,
       });
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -69,10 +105,25 @@ function AdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    window.location.href = "/";
-  };
+  const menuItems = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "enquiries", label: "Enquiries", icon: Mail },
+    { id: "rooms", label: "Rooms", icon: BedDouble },
+    { id: "students", label: "Students", icon: GraduationCap },
+    { id: "users", label: "User Management", icon: Users },
+    { id: "face-registration", label: "Face Registration", icon: Camera },
+    { id: "face-attendance", label: "Face Attendance", icon: ScanFace },
+    { id: "analytics", label: "Attendance Analytics", icon: BarChart },
+    {
+      id: "complaints",
+      label: "Complaints",
+      icon: AlertCircle,
+      badge: stats.unreadComplaints > 0 ? stats.unreadComplaints : null,
+    },
+    { id: "mess", label: "Mess Dashboard", icon: Utensils },
+    { id: "mess-management", label: "Mess Management", icon: Settings },
+    { id: "mess-ai", label: "Mess AI Analytics", icon: Sparkles },
+  ];
 
   const renderContent = () => {
     switch (activePage) {
@@ -90,556 +141,335 @@ function AdminDashboard() {
         return <FaceAttendance />;
       case "analytics":
         return <AttendanceAnalytics />;
+      case "complaints":
+        return <AdminComplaints />;
       case "mess":
         return <MessDashboard />;
       case "mess-management":
         return <MessAdminPanel />;
-      default:
+      case "mess-ai":
+        return <MessSmartAdmin embedded />;
+      default: {
+        if (loading) {
+          return (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm">
+              <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+              <p className="text-slate-500 font-medium">
+                Loading dashboard data...
+              </p>
+            </div>
+          );
+        }
+
+        if (error) {
+          return (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-red-200 shadow-sm text-center">
+              <AlertCircle className="text-red-500 mb-4" size={64} />
+              <h3 className="text-2xl font-bold text-slate-800 mb-2">
+                Failed to Load Data
+              </h3>
+              <p className="text-slate-500 mb-6">{error}</p>
+              <button
+                onClick={fetchDashboardStats}
+                className="px-6 py-3 bg-red-50 text-red-700 font-bold rounded-xl hover:bg-red-100 transition-colors"
+              >
+                Retry Request
+              </button>
+            </div>
+          );
+        }
+
+        const occupancyRate =
+          stats.totalRooms > 0
+            ? Math.round((stats.occupiedRooms / stats.totalRooms) * 100)
+            : 0;
+        const highlightCards = [
+          {
+            label: "New Enquiries",
+            value: stats.newEnquiries,
+            desc: "Pending review",
+            icon: Mail,
+            accent: "from-amber-500 via-orange-500 to-rose-500",
+          },
+          {
+            label: "Available Rooms",
+            value: stats.availableRooms,
+            desc: `Out of ${stats.totalRooms} total`,
+            icon: BedDouble,
+            accent: "from-indigo-500 via-violet-500 to-fuchsia-500",
+          },
+          {
+            label: "Unread Complaints",
+            value: stats.unreadComplaints,
+            desc: "Needs attention",
+            icon: AlertCircle,
+            accent: "from-emerald-500 via-cyan-500 to-blue-500",
+          },
+        ];
+
         return (
-          <div>
-            {loading ? (
-              <div style={styles.loadingContainer}>
-                <div style={styles.spinner}></div>
-                <p>Loading dashboard data...</p>
+          <div className="space-y-6">
+            <div className="grid gap-6 xl:grid-cols-[1.55fr_0.95fr]">
+              <motion.div
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-blue-900 to-cyan-600 text-white shadow-[0_30px_80px_rgba(15,23,42,0.18)]"
+              >
+                <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+                <div className="absolute left-0 top-0 h-full w-full bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.2),_transparent_28%)]" />
+                <div className="relative p-8 sm:p-10 lg:p-12">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="max-w-2xl">
+                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200/75">
+                        Admin command center
+                      </p>
+                      <h2 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
+                        Hostel operations in one beautiful view
+                      </h2>
+                      <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200/85">
+                        Stay ahead of occupancy, enquiries, attendance and mess
+                        status with a polished dashboard designed for fast
+                        decisions.
+                      </p>
+                    </div>
+                    <div className="rounded-3xl bg-white/10 px-4 py-3 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm">
+                      Live summary
+                    </div>
+                  </div>
+
+                  <div className="mt-10 grid gap-4 sm:grid-cols-3">
+                    {[
+                      {
+                        label: "Total Enquiries",
+                        value: stats.totalEnquiries,
+                        icon: BarChart,
+                      },
+                      {
+                        label: "Allocated Rooms",
+                        value: stats.approvedStudents,
+                        icon: CheckCircle,
+                      },
+                      {
+                        label: "Occupancy",
+                        value: `${occupancyRate}%`,
+                        icon: Building,
+                      },
+                    ].map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-3xl bg-white/10 p-5 ring-1 ring-white/10 backdrop-blur-sm transition-all hover:-translate-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.28em] text-slate-200/75">
+                              {item.label}
+                            </p>
+                            <p className="mt-4 text-3xl font-semibold text-white">
+                              {item.value}
+                            </p>
+                          </div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-white/15 text-white">
+                            <item.icon size={22} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+
+              <div className="grid gap-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.05 }}
+                  className="rounded-[1.75rem] bg-white p-6 shadow-sm border border-slate-200"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-[0.24em]">
+                        Occupancy pulse
+                      </p>
+                      <h3 className="mt-3 text-2xl font-semibold text-slate-900">
+                        {occupancyRate}% full
+                      </h3>
+                    </div>
+                    <div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+                      {stats.occupiedRooms}/{stats.totalRooms} rooms
+                    </div>
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                    {[
+                      {
+                        label: "Room Occupancy",
+                        value: occupancyRate,
+                        color: "bg-cyan-500",
+                      },
+                      {
+                        label: "New Enquiries",
+                        value:
+                          stats.newEnquiries > 0
+                            ? Math.min(
+                                100,
+                                Math.round(
+                                  (stats.newEnquiries /
+                                    Math.max(1, stats.totalEnquiries)) *
+                                    100,
+                                ),
+                              )
+                            : 0,
+                        color: "bg-amber-500",
+                      },
+                      {
+                        label: "Unread Complaints",
+                        value:
+                          stats.unreadComplaints > 0
+                            ? Math.min(100, stats.unreadComplaints * 12)
+                            : 0,
+                        color: "bg-emerald-500",
+                      },
+                    ].map((item, idx) => (
+                      <div key={idx} className="space-y-2">
+                        <div className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-600">
+                          <span>{item.label}</span>
+                          <span>{item.value}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${item.color}`}
+                            style={{ width: `${item.value}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.1 }}
+                  className="rounded-[1.75rem] bg-white p-6 shadow-sm border border-slate-200"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-[0.24em]">
+                        Quick actions
+                      </p>
+                      <h3 className="mt-3 text-2xl font-semibold text-slate-900">
+                        Jump to management panels
+                      </h3>
+                    </div>
+                    <div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+                      Fast access
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-3">
+                    {[
+                      { label: "Review Enquiries", target: "enquiries" },
+                      { label: "Manage Rooms", target: "rooms" },
+                      { label: "Face Attendance", target: "face-attendance" },
+                    ].map((item, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActivePage(item.target)}
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-100"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
               </div>
-            ) : error ? (
-              <div style={styles.errorContainer}>
-                <div style={styles.errorIcon}>⚠️</div>
-                <h3>Failed to Load Data</h3>
-                <p>{error}</p>
-                <button style={styles.retryBtn} onClick={fetchDashboardStats}>
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <div style={styles.cardContainer}>
-                <div style={styles.card}>
-                  <div style={styles.cardIcon}>📊</div>
-                  <h3>Total Enquiries</h3>
-                  <p style={styles.cardNumber}>{stats.totalEnquiries}</p>
-                  <p style={styles.cardSubtext}>All time</p>
-                </div>
+            </div>
 
-                <div style={styles.card}>
-                  <div style={styles.cardIcon}>🆕</div>
-                  <h3>New Enquiries</h3>
-                  <p style={styles.cardNumber}>{stats.newEnquiries}</p>
-                  <p style={styles.cardSubtext}>Pending review</p>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={styles.cardIcon}>✅</div>
-                  <h3>Room Allocated</h3>
-                  <p style={styles.cardNumber}>{stats.approvedStudents}</p>
-                  <p style={styles.cardSubtext}>Students with rooms</p>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={styles.cardIcon}>🛏️</div>
-                  <h3>Available Rooms</h3>
-                  <p style={styles.cardNumber}>{stats.availableRooms}</p>
-                  <p style={styles.cardSubtext}>Out of {stats.totalRooms} total</p>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={styles.cardIcon}>🏢</div>
-                  <h3>Room Occupancy</h3>
-                  <p style={styles.cardNumber}>
-                    {stats.totalRooms > 0 ? Math.round((stats.occupiedRooms / stats.totalRooms) * 100) : 0}%
-                  </p>
-                  <p style={styles.cardSubtext}>{stats.occupiedRooms} occupied</p>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={styles.cardIcon}>👥</div>
-                  <h3>Total Students</h3>
-                  <p style={styles.cardNumber}>{stats.approvedStudents}</p>
-                  <p style={styles.cardSubtext}>Registered students</p>
-                </div>
-              </div>
-            )}
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {highlightCards.map((item, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: idx * 0.05 }}
+                  className="rounded-[1.75rem] bg-white p-6 shadow-sm border border-slate-200"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
+                        {item.label}
+                      </p>
+                      <p className="mt-4 text-3xl font-semibold text-slate-900">
+                        {item.value}
+                      </p>
+                    </div>
+                    <div
+                      className={`flex h-12 w-12 items-center justify-center rounded-3xl bg-gradient-to-br ${item.accent} text-white shadow-lg shadow-slate-900/10`}
+                    >
+                      <item.icon size={24} />
+                    </div>
+                  </div>
+                  <p className="mt-5 text-sm text-slate-500">{item.desc}</p>
+                </motion.div>
+              ))}
+            </div>
           </div>
         );
+      }
     }
   };
 
+  const pageTitles = {
+    dashboard: "Dashboard Overview",
+    enquiries: "📫Enquiry Management",
+    // rooms: "Room Management",
+    students: "🧑‍🎓Student Management",
+    users: "👤User Management",
+    "face-registration": "Face Registration",
+    "face-attendance": "Face Attendance Tracking",
+    mess: "Mess Dashboard",
+    "mess-management": "Mess Management",
+  };
+
+  const pageSubtitles = {
+    dashboard: "Monitor your hostel operations",
+    enquiries: "Manage student enquiries and applications",
+    // rooms: "Manage rooms and bed assignments",
+    students: "View and manage student information",
+    users: "Create and manage system users",
+    "face-registration": "Register student faces for biometric authentication",
+    "face-attendance": "Track attendance using face recognition",
+    mess: "View daily meal count based on attendance",
+    "mess-management": "Manage mess fee structure, menus, and assignments",
+  };
+
   return (
-    <div style={styles.container}>
-      {/* Sidebar */}
-      <div style={styles.sidebar}>
-        <div style={styles.logo}>
-          <div style={styles.logoIcon}>🏫</div>
-          <h2 style={styles.logoText}>HostelAdmin</h2>
+    <DashboardLayout
+      menuItems={menuItems}
+      activeMenu={activePage}
+      setActiveMenu={setActivePage}
+      user={user}
+    >
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800">
+            {pageTitles[activePage]}
+          </h1>
+          <p className="text-slate-500 font-medium mt-1">
+            {pageSubtitles[activePage]}
+          </p>
         </div>
 
-        <nav style={styles.nav}>
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "dashboard" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("dashboard")}
-          >
-            <span style={styles.navIcon}>📊</span>
-            Dashboard
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "enquiries" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("enquiries")}
-          >
-            <span style={styles.navIcon}>📩</span>
-            Enquiries
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "rooms" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("rooms")}
-          >
-            <span style={styles.navIcon}>🛏️</span>
-            Rooms
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "students" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("students")}
-          >
-            <span style={styles.navIcon}>🎓</span>
-            Students
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "users" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("users")}
-          >
-            <span style={styles.navIcon}>👥</span>
-            User Management
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "face-registration" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("face-registration")}
-          >
-            <span style={styles.navIcon}>📸</span>
-            Face Registration
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "face-attendance" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("face-attendance")}
-          >
-            <span style={styles.navIcon}>🔍</span>
-            Face Attendance
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "analytics" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("analytics")}
-          >
-            <span style={styles.navIcon}>📊</span>
-            Attendance Analytics
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "mess" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("mess")}
-          >
-            <span style={styles.navIcon}>🍽️</span>
-            Mess Dashboard
-          </button>
-
-          <button
-            style={{
-              ...styles.navItem,
-              ...(activePage === "mess-management" ? styles.navItemActive : {})
-            }}
-            onClick={() => setActivePage("mess-management")}
-          >
-            <span style={styles.navIcon}>⚙️</span>
-            Mess Management
-          </button>
-        </nav>
-
-        <div style={styles.sidebarFooter}>
-          <button style={styles.logoutBtn} onClick={handleLogout}>
-            🚪 Logout
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div style={styles.main}>
-        {/* Header */}
-        <div style={styles.header}>
-          <div style={styles.headerLeft}>
-            <h1 style={styles.pageTitle}>
-              {activePage === "dashboard" && "Dashboard Overview"}
-              {activePage === "enquiries" && "Enquiry Management"}
-              {activePage === "rooms" && "Room Management"}
-              {activePage === "students" && "Student Management"}
-              {activePage === "users" && "User Management"}
-              {activePage === "face-registration" && "Face Registration"}
-              {activePage === "face-attendance" && "Face Attendance Tracking"}
-              {activePage === "analytics" && "Attendance Analytics"}
-              {activePage === "mess" && "Mess Dashboard"}
-              {activePage === "mess-management" && "Mess Management"}
-            </h1>
-            <p style={styles.pageSubtitle}>
-              {activePage === "dashboard" && "Monitor your hostel operations"}
-              {activePage === "enquiries" && "Manage student enquiries and applications"}
-              {activePage === "rooms" && "Manage rooms and bed assignments"}
-              {activePage === "students" && "View and manage student information"}
-              {activePage === "users" && "Create and manage system users"}
-              {activePage === "face-registration" && "Register student faces for biometric authentication"}
-              {activePage === "face-attendance" && "Track attendance using face recognition"}
-              {activePage === "mess" && "View daily meal count based on attendance"}
-              {activePage === "mess-management" && "Manage mess fee structure, menus, and assignments"}
-            </p>
-          </div>
-          <div style={styles.headerRight}>
-            <div style={styles.userInfo}>
-              <div style={styles.userAvatar}>
-                <span style={styles.avatarText}>A</span>
-              </div>
-              <div style={styles.userDetails}>
-                <p style={styles.userName}>Admin</p>
-                <p style={styles.userRole}>Administrator</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Content */}
-        <div style={styles.content}>
+        <motion.div
+          key={activePage}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           {renderContent()}
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
-
-const styles = {
-  container: {
-    display: "flex",
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
-  },
-
-  sidebar: {
-    width: "280px",
-    background: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(20px)",
-    padding: "30px 20px",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "2px 0 20px rgba(0, 0, 0, 0.1)",
-    borderRight: "1px solid rgba(255, 255, 255, 0.2)"
-  },
-
-  logo: {
-    display: "flex",
-    alignItems: "center",
-    gap: "15px",
-    marginBottom: "40px",
-    paddingBottom: "20px",
-    borderBottom: "2px solid rgba(102, 126, 234, 0.2)"
-  },
-
-  logoIcon: {
-    fontSize: "32px",
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    borderRadius: "12px",
-    width: "50px",
-    height: "50px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)"
-  },
-
-  logoText: {
-    fontSize: "24px",
-    fontWeight: "700",
-    color: "#2c3e50",
-    margin: 0
-  },
-
-  nav: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px"
-  },
-
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    padding: "15px 20px",
-    background: "transparent",
-    border: "none",
-    borderRadius: "12px",
-    color: "#5a6c7d",
-    fontSize: "16px",
-    fontWeight: "500",
-    cursor: "pointer",
-    transition: "all 0.3s ease",
-    textAlign: "left",
-    "&:hover": {
-      background: "rgba(102, 126, 234, 0.1)",
-      color: "#667eea",
-      transform: "translateX(5px)"
-    }
-  },
-
-  navItemActive: {
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    color: "white",
-    boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)",
-    "&:hover": {
-      background: "linear-gradient(135deg, #667eea, #764ba2)",
-      color: "white",
-      transform: "translateX(5px)"
-    }
-  },
-
-  navIcon: {
-    fontSize: "18px",
-    width: "20px",
-    textAlign: "center"
-  },
-
-  sidebarFooter: {
-    marginTop: "auto",
-    paddingTop: "20px",
-    borderTop: "1px solid rgba(0, 0, 0, 0.1)"
-  },
-
-  logoutBtn: {
-    width: "100%",
-    padding: "12px 20px",
-    background: "linear-gradient(135deg, #e74c3c, #c0392b)",
-    color: "white",
-    border: "none",
-    borderRadius: "10px",
-    fontSize: "16px",
-    fontWeight: "600",
-    cursor: "pointer",
-    transition: "all 0.3s ease",
-    "&:hover": {
-      transform: "translateY(-2px)",
-      boxShadow: "0 4px 15px rgba(231, 76, 60, 0.3)"
-    }
-  },
-
-  main: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden"
-  },
-
-  header: {
-    background: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(20px)",
-    padding: "25px 30px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    boxShadow: "0 2px 20px rgba(0, 0, 0, 0.1)",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.2)"
-  },
-
-  headerLeft: {
-    flex: 1
-  },
-
-  pageTitle: {
-    fontSize: "28px",
-    fontWeight: "700",
-    color: "#2c3e50",
-    margin: "0 0 5px 0"
-  },
-
-  pageSubtitle: {
-    fontSize: "16px",
-    color: "#7f8c8d",
-    margin: 0
-  },
-
-  headerRight: {
-    display: "flex",
-    alignItems: "center"
-  },
-
-  userInfo: {
-    display: "flex",
-    alignItems: "center",
-    gap: "15px"
-  },
-
-  userAvatar: {
-    width: "45px",
-    height: "45px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)"
-  },
-
-  avatarText: {
-    color: "white",
-    fontSize: "18px",
-    fontWeight: "700"
-  },
-
-  userDetails: {
-    textAlign: "right"
-  },
-
-  userName: {
-    fontSize: "16px",
-    fontWeight: "600",
-    color: "#2c3e50",
-    margin: "0 0 2px 0"
-  },
-
-  userRole: {
-    fontSize: "14px",
-    color: "#7f8c8d",
-    margin: 0
-  },
-
-  content: {
-    flex: 1,
-    padding: "30px",
-    overflowY: "auto",
-    background: "rgba(255, 255, 255, 0.05)"
-  },
-
-  loadingContainer: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "80px",
-    textAlign: "center",
-    background: "rgba(255, 255, 255, 0.9)",
-    borderRadius: "20px",
-    border: "1px solid rgba(255, 255, 255, 0.2)"
-  },
-
-  spinner: {
-    width: "60px",
-    height: "60px",
-    border: "4px solid #f3f3f3",
-    borderTop: "4px solid #667eea",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-    marginBottom: "20px"
-  },
-
-  errorContainer: {
-    textAlign: "center",
-    padding: "80px",
-    background: "rgba(255, 255, 255, 0.9)",
-    borderRadius: "20px",
-    border: "1px solid rgba(231, 76, 60, 0.2)"
-  },
-
-  errorIcon: {
-    fontSize: "60px",
-    marginBottom: "20px"
-  },
-
-  retryBtn: {
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    color: "white",
-    border: "none",
-    padding: "12px 24px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontSize: "16px",
-    fontWeight: "600",
-    marginTop: "20px",
-    transition: "all 0.3s ease",
-    "&:hover": {
-      transform: "translateY(-2px)",
-      boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)"
-    }
-  },
-
-  cardContainer: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: "25px",
-    marginBottom: "30px"
-  },
-
-  card: {
-    background: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(20px)",
-    padding: "30px",
-    borderRadius: "20px",
-    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
-    border: "1px solid rgba(255, 255, 255, 0.2)",
-    transition: "all 0.3s ease",
-    textAlign: "center",
-    "&:hover": {
-      transform: "translateY(-5px)",
-      boxShadow: "0 15px 40px rgba(0, 0, 0, 0.15)"
-    }
-  },
-
-  cardIcon: {
-    fontSize: "40px",
-    marginBottom: "15px"
-  },
-
-  cardNumber: {
-    fontSize: "36px",
-    fontWeight: "700",
-    color: "#2c3e50",
-    margin: "15px 0",
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    backgroundClip: "text"
-  },
-
-  cardSubtext: {
-    fontSize: "14px",
-    color: "#7f8c8d",
-    margin: "5px 0 0 0",
-    fontWeight: "500"
-  }
-};
-
-export default AdminDashboard;
