@@ -79,7 +79,7 @@ export default function Enquiry() {
             <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-blue-600 font-bold text-2xl shadow-lg">
               H
             </div>
-            <span className="text-2xl font-bold tracking-tight">HostelHub</span>
+            <span className="text-2xl font-bold tracking-tight">HostelSync</span>
           </div>
 
           <motion.div
@@ -101,7 +101,7 @@ export default function Enquiry() {
         </div>
 
         <div className="relative z-10 text-sm text-blue-200">
-          &copy; {new Date().getFullYear()} HostelHub. All rights reserved.
+          &copy; {new Date().getFullYear()} HostelSync. All rights reserved.
         </div>
       </div>
 
@@ -133,7 +133,7 @@ export default function Enquiry() {
             <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-md">
               H
             </div>
-            <span className="text-2xl font-bold text-slate-800">HostelHub</span>
+            <span className="text-2xl font-bold text-slate-800">HostelSync</span>
           </div>
 
           <h2 className="text-3xl font-bold text-slate-900 mb-2">
