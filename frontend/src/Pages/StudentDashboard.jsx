@@ -302,7 +302,7 @@ export default function StudentDashboard() {
                   },
                   {
                     icon: MessageSquareWarning,
-                    text: "Welcome to HostelHub!",
+                    text: "Welcome to HostelSync!",
                     time: "2 months ago",
                     color: "text-indigo-600",
                     bg: "bg-indigo-50",
