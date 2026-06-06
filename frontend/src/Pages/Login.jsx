@@ -245,7 +245,7 @@ export default function Login() {
             <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg">
               H
             </div>
-            <span className="text-2xl font-bold tracking-tight">HostelHub</span>
+            <span className="text-2xl font-bold tracking-tight">HostelSync</span>
           </div>
         </div>
 
